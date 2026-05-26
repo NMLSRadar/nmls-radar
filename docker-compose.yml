@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  fastapi-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nmls-radar-api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/home/backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres_radar_secure_pass@postgres-db:5432/nmls_radar
+      - REDIS_URL=redis://redis-broker:6379/0
+      - OPENAI_API_KEY=sk-your-openai-api-key-here
+      - APIFY_API_TOKEN=your-apify-token-here
+    depends_on:
+      - postgres-db
+      - redis-broker
+
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: nmls-radar-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres_radar_secure_pass
+      - POSTGRES_DB=nmls_radar
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis-broker:
+    image: redis:7-alpine
+    container_name: nmls-radar-redis
+    ports:
+      - "6379:6379"
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nmls-radar-worker
+    command: celery -A app.tasks.pipeline.celery_app worker --loglevel=info
+    volumes:
+      - ./backend:/home/backend
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres_radar_secure_pass@postgres-db:5432/nmls_radar
+      - REDIS_URL=redis://redis-broker:6379/0
+      - OPENAI_API_KEY=sk-your-openai-api-key-here
+      - APIFY_API_TOKEN=your-apify-token-here
+    depends_on:
+      - postgres-db
+      - redis-broker
+
+volumes:
+  pgdata:
